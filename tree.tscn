@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://ck4u2rs8gyl"]
+
+[ext_resource type="Texture2D" uid="uid://bewnummbjil10" path="res://images/fruit-tree.svg" id="1_depwj"]
+
+[node name="Tree" type="Node2D"]
+scale = Vector2(2, 2)
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("1_depwj")

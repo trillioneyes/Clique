@@ -1,0 +1,22 @@
+[gd_scene load_steps=3 format=3 uid="uid://lfaeseouo8pf"]
+
+[ext_resource type="PackedScene" uid="uid://d1go8og6ua6v6" path="res://character.tscn" id="1_dbg47"]
+[ext_resource type="PackedScene" uid="uid://ck4u2rs8gyl" path="res://tree.tscn" id="2_b7340"]
+
+[node name="World" type="Node2D"]
+
+[node name="Character" parent="." instance=ExtResource("1_dbg47")]
+position = Vector2(174, 314)
+
+[node name="Character2" parent="." instance=ExtResource("1_dbg47")]
+position = Vector2(176, 118)
+
+[node name="Character3" parent="." instance=ExtResource("1_dbg47")]
+position = Vector2(177, 523)
+
+[node name="Tree" parent="." instance=ExtResource("2_b7340")]
+position = Vector2(560, 301)
+scale = Vector2(1, 1)
+
+[node name="Controller" type="Controller" parent="."]
+time = 0.0
