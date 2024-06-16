@@ -1,5 +1,6 @@
-[gd_scene load_steps=7 format=3 uid="uid://d1go8og6ua6v6"]
+[gd_scene load_steps=8 format=3 uid="uid://d1go8og6ua6v6"]
 
+[ext_resource type="Script" path="res://character.gd" id="1_0uiow"]
 [ext_resource type="Texture2D" uid="uid://oi0io7qqrfn" path="res://images/person.svg" id="1_vywcl"]
 [ext_resource type="Texture2D" uid="uid://c3llqjo4dpv7r" path="res://images/big-gear.svg" id="2_4a5ln"]
 [ext_resource type="Texture2D" uid="uid://cy77wifgsp0r7" path="res://images/shiny-apple.svg" id="3_w41bk"]
@@ -42,6 +43,7 @@ _data = {
 }
 
 [node name="Character" type="Node2D"]
+script = ExtResource("1_0uiow")
 
 [node name="Character" type="Sprite2D" parent="."]
 texture = ExtResource("1_vywcl")
