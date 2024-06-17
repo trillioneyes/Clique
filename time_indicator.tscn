@@ -1,0 +1,24 @@
+[gd_scene load_steps=2 format=3 uid="uid://dx1bddq70jlr3"]
+
+[ext_resource type="Script" path="res://time_indicator.gd" id="1_chrgc"]
+
+[node name="Time indicator" type="HBoxContainer"]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+grow_horizontal = 2
+size_flags_horizontal = 6
+size_flags_vertical = 2
+script = ExtResource("1_chrgc")
+
+[node name="Time of day" type="Label" parent="."]
+layout_mode = 2
+text = "Predawn"
+
+[node name="Label" type="Label" parent="."]
+layout_mode = 2
+text = "of day"
+
+[node name="Day number" type="Label" parent="."]
+layout_mode = 2
+text = "0"

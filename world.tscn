@@ -1,7 +1,9 @@
-[gd_scene load_steps=3 format=3 uid="uid://lfaeseouo8pf"]
+[gd_scene load_steps=5 format=3 uid="uid://lfaeseouo8pf"]
 
 [ext_resource type="PackedScene" uid="uid://d1go8og6ua6v6" path="res://character.tscn" id="1_dbg47"]
 [ext_resource type="PackedScene" uid="uid://ck4u2rs8gyl" path="res://tree.tscn" id="2_b7340"]
+[ext_resource type="PackedScene" uid="uid://dx1bddq70jlr3" path="res://time_indicator.tscn" id="3_nxm3d"]
+[ext_resource type="PackedScene" uid="uid://cva8ppi0jo7be" path="res://stockpile.tscn" id="4_d81wp"]
 
 [node name="World" type="Node2D"]
 
@@ -18,5 +20,27 @@ position = Vector2(177, 523)
 position = Vector2(560, 301)
 scale = Vector2(1, 1)
 
-[node name="Controller" type="Controller" parent="."]
+[node name="Controller" type="Controller" parent="." node_paths=PackedStringArray("time_indicator", "stockpile")]
 day = 0
+time_indicator = NodePath("../Control/Time indicator")
+stockpile = NodePath("../Stockpile")
+
+[node name="Control" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 1152.0
+offset_bottom = 648.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Time indicator" parent="Control" instance=ExtResource("3_nxm3d")]
+layout_mode = 0
+anchors_preset = 0
+anchor_left = 0.0
+anchor_right = 0.0
+grow_horizontal = 1
+alignment = 1
+
+[node name="Stockpile" parent="." instance=ExtResource("4_d81wp")]

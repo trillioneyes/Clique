@@ -1,6 +1,6 @@
 use core::panic;
 
-use godot::engine::Node;
+use godot::engine::{Control, Node};
 use godot::prelude::*;
 
 struct MyExtension;
@@ -67,6 +67,10 @@ struct Controller {
     time: f64,
     #[export]
     day: i64,
+    #[export]
+    time_indicator: Option<Gd<Control>>,
+    #[export]
+    stockpile: Option<Gd<Node2D>>,
     characters: Vec<Character>,
     apples: i64,
     base: Base<Node>,
@@ -100,6 +104,18 @@ impl Controller {
             delta_apples += self.fulfill(c, task);
         }
         self.apples += delta_apples;
+        self.time_indicator.as_mut().map(|ind| {
+            ind.call(
+                "set_time".into(),
+                &[
+                    Variant::from(format!("{:?}", new_phase)),
+                    Variant::from(format!("{}", self.day)),
+                ],
+            )
+        });
+        self.stockpile
+            .as_mut()
+            .map(|pile| pile.set("apples".into(), Variant::from(self.apples)));
         godot_print!(
             "Phase transition from {:?} to {:?}: apple stockpile at {}.",
             old_phase,
@@ -118,6 +134,8 @@ impl INode for Controller {
             characters: vec![Character(), Character(), Character()],
             apples: 0,
             base,
+            time_indicator: None,
+            stockpile: None,
         }
     }
 
