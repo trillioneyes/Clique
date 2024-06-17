@@ -19,3 +19,4 @@ position = Vector2(560, 301)
 scale = Vector2(1, 1)
 
 [node name="Controller" type="Controller" parent="."]
+day = 0
