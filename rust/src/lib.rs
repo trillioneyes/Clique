@@ -1,7 +1,6 @@
 use core::panic;
 
 use godot::engine::Node;
-use godot::engine::SceneTree;
 use godot::prelude::*;
 
 struct MyExtension;
@@ -9,7 +8,7 @@ struct MyExtension;
 #[gdextension]
 unsafe impl ExtensionLibrary for MyExtension {}
 
-struct Character(Gd<Node2D>);
+struct Character();
 
 #[derive(PartialEq, Debug)]
 enum Phase {
@@ -45,6 +44,8 @@ impl Phase {
 struct Controller {
     #[export]
     time: f64,
+    characters: Vec<Character>,
+    apples: i64,
     base: Base<Node>,
 }
 
@@ -53,27 +54,28 @@ impl Controller {
         Phase::from_index((self.time / 10.0) as i64)
     }
 
-    fn sun_transit(&self, old_phase: Phase, new_phase: Phase) {
-        let method: StringName = match old_phase {
-            Phase::Morning | Phase::Evening => "work".into(),
-            Phase::Midday | Phase::Night => "rest".into(),
-        };
-        let characters = self
-            .base()
-            .get_tree()
-            .unwrap()
-            .get_nodes_in_group("characters".into());
-        for mut c in characters.iter_shared() {
-            c.call(method.clone(), &[]);
+    fn sun_transit(&mut self, old_phase: Phase, new_phase: Phase) {
+        for _c in self.characters.iter() {
+            self.apples += 1;
         }
-        godot_print!("Phase transition from {:?} to {:?}!", old_phase, new_phase)
+        godot_print!(
+            "Phase transition from {:?} to {:?}! Apple stockpile at {}.",
+            old_phase,
+            new_phase,
+            self.apples
+        )
     }
 }
 
 #[godot_api]
 impl INode for Controller {
     fn init(base: Base<Node>) -> Self {
-        Self { time: 0.0, base }
+        Self {
+            time: 0.0,
+            characters: vec![Character(), Character(), Character()],
+            apples: 0,
+            base,
+        }
     }
 
     fn process(&mut self, delta: f64) {
