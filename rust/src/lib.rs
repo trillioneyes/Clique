@@ -1,6 +1,7 @@
 use core::panic;
 
-use godot::engine::{Control, Node};
+use godot::engine::{Control, Node, Node2D};
+use godot::obj::WithBaseField;
 use godot::prelude::*;
 
 struct MyExtension;
@@ -61,6 +62,25 @@ impl Phase {
 }
 
 #[derive(GodotClass)]
+#[class(base=Node2D, init)]
+struct SampleChildren {
+    #[export]
+    parent: Option<Gd<Node2D>>,
+}
+
+impl SampleChildren {
+    fn pick(&self) -> Gd<Node2D> {
+        self.parent
+            .as_ref()
+            .unwrap()
+            .get_children()
+            .pick_random()
+            .unwrap()
+            .cast()
+    }
+}
+
+#[derive(GodotClass)]
 #[class(base=Node)]
 struct Controller {
     #[export]
@@ -71,9 +91,33 @@ struct Controller {
     time_indicator: Option<Gd<Control>>,
     #[export]
     stockpile: Option<Gd<Node2D>>,
+    #[export]
+    apple_tree: Option<Gd<SampleChildren>>,
     characters: Vec<Character>,
     apples: i64,
     base: Base<Node>,
+}
+
+#[derive(GodotClass)]
+#[class(base=Node2D, init)]
+struct Traveler {
+    #[export]
+    speed: f64,
+    base: Base<Node2D>,
+}
+
+impl Traveler {
+    fn with_speed(speed: f64) -> Gd<Self> {
+        Gd::from_init_fn(|base| Traveler { speed, base })
+    }
+}
+
+#[godot_api]
+impl INode2D for Traveler {
+    fn process(&mut self, delta: f64) {
+        let distance = (delta * self.speed) as f32;
+        self.base_mut().translate(distance * Vector2::LEFT);
+    }
 }
 
 impl Controller {
@@ -88,8 +132,23 @@ impl Controller {
                 godot_print!("Zzzzz");
                 0
             }
-            Task::Work => 1,
+            Task::Work => {
+                self.pick_apple();
+                1
+            }
         }
+    }
+
+    fn pick_apple(&self) {
+        let spawn = self.apple_tree.as_ref().unwrap().bind().pick();
+        let scene: Gd<PackedScene> = load("res://apple.tscn");
+        let mut apple = scene.instantiate_as::<Traveler>();
+        apple.bind_mut().speed = 150.0;
+        apple
+            .bind_mut()
+            .base_mut()
+            .set_global_position(spawn.get_global_position());
+        self.base().get_parent().unwrap().add_child(apple.upcast())
     }
 
     fn sun_transit(&mut self, old_phase: Phase, new_phase: Phase) {
@@ -136,6 +195,7 @@ impl INode for Controller {
             base,
             time_indicator: None,
             stockpile: None,
+            apple_tree: None,
         }
     }
 

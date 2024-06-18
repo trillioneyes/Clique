@@ -20,10 +20,10 @@ position = Vector2(177, 523)
 position = Vector2(560, 301)
 scale = Vector2(1, 1)
 
-[node name="Controller" type="Controller" parent="." node_paths=PackedStringArray("time_indicator", "stockpile")]
-day = 0
+[node name="Controller" type="Controller" parent="." node_paths=PackedStringArray("time_indicator", "stockpile", "apple_tree")]
 time_indicator = NodePath("../Control/Time indicator")
 stockpile = NodePath("../Stockpile")
+apple_tree = NodePath("../Tree")
 
 [node name="Control" type="Control" parent="."]
 layout_mode = 3
@@ -34,13 +34,14 @@ offset_right = 1152.0
 offset_bottom = 648.0
 grow_horizontal = 2
 grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
 
 [node name="Time indicator" parent="Control" instance=ExtResource("3_nxm3d")]
-layout_mode = 0
-anchors_preset = 0
-anchor_left = 0.0
-anchor_right = 0.0
-grow_horizontal = 1
+layout_mode = 1
+offset_left = -67.5
+offset_right = 67.5
+offset_bottom = 23.0
 alignment = 1
 
 [node name="Stockpile" parent="." instance=ExtResource("4_d81wp")]

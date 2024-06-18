@@ -2,8 +2,62 @@
 
 [ext_resource type="Texture2D" uid="uid://bewnummbjil10" path="res://images/fruit-tree.svg" id="1_depwj"]
 
-[node name="Tree" type="Node2D"]
+[node name="Tree" type="SampleChildren" node_paths=PackedStringArray("parent")]
+parent = NodePath("Apples")
 scale = Vector2(2, 2)
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 texture = ExtResource("1_depwj")
+
+[node name="Apples" type="Node2D" parent="."]
+
+[node name="Node2D" type="Node2D" parent="Apples"]
+position = Vector2(46.5, -42.5)
+
+[node name="Node2D2" type="Node2D" parent="Apples"]
+position = Vector2(134, -30.5)
+
+[node name="Node2D3" type="Node2D" parent="Apples"]
+position = Vector2(143.5, -94.5)
+
+[node name="Node2D4" type="Node2D" parent="Apples"]
+position = Vector2(71, -129)
+
+[node name="Node2D5" type="Node2D" parent="Apples"]
+position = Vector2(7, -98)
+
+[node name="Node2D6" type="Node2D" parent="Apples"]
+position = Vector2(-48.5, -127.5)
+
+[node name="Node2D7" type="Node2D" parent="Apples"]
+position = Vector2(-113, -159.5)
+
+[node name="Node2D8" type="Node2D" parent="Apples"]
+position = Vector2(-155.5, -68.5)
+
+[node name="Node2D9" type="Node2D" parent="Apples"]
+position = Vector2(-175.5, -19.5)
+
+[node name="Node2D10" type="Node2D" parent="Apples"]
+position = Vector2(-187, 64.5)
+
+[node name="Node2D11" type="Node2D" parent="Apples"]
+position = Vector2(-98, 18)
+
+[node name="Node2D12" type="Node2D" parent="Apples"]
+position = Vector2(-36.5, -25)
+
+[node name="Node2D13" type="Node2D" parent="Apples"]
+position = Vector2(32.5, 34)
+
+[node name="Node2D14" type="Node2D" parent="Apples"]
+position = Vector2(118.5, 27)
+
+[node name="Node2D15" type="Node2D" parent="Apples"]
+position = Vector2(195.5, 45.5)
+
+[node name="Node2D16" type="Node2D" parent="Apples"]
+position = Vector2(61.5, -190)
+
+[node name="Node2D17" type="Node2D" parent="Apples"]
+position = Vector2(137.5, -161.5)
