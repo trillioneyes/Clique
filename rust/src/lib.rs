@@ -9,7 +9,7 @@ struct MyExtension;
 #[gdextension]
 unsafe impl ExtensionLibrary for MyExtension {}
 
-struct Character();
+struct Character(Gd<Node2D>);
 
 enum Task {
     Eat,
@@ -102,21 +102,39 @@ struct Controller {
 #[class(base=Node2D, init)]
 struct Traveler {
     #[export]
-    speed: f64,
+    velocity: Vector2,
+    target: Vector2,
     base: Base<Node2D>,
 }
 
 impl Traveler {
-    fn with_speed(speed: f64) -> Gd<Self> {
-        Gd::from_init_fn(|base| Traveler { speed, base })
+    fn new(from: &Node2D, to: &Node2D) -> Gd<Self> {
+        let speed: f32 = 300.0;
+        let start = from.get_global_position();
+        let end = to.get_global_position();
+        let velocity = (end - start).normalized() * speed;
+        let mut traveler = Gd::from_init_fn(|base| Traveler {
+            velocity,
+            target: end,
+            base,
+        });
+        traveler.set_global_position(start);
+        traveler
     }
 }
 
 #[godot_api]
 impl INode2D for Traveler {
     fn process(&mut self, delta: f64) {
-        let distance = (delta * self.speed) as f32;
-        self.base_mut().translate(distance * Vector2::LEFT);
+        let displacement = delta as f32 * self.velocity;
+        let new_pos = self
+            .base()
+            .get_global_position()
+            .move_toward(self.target, displacement.length());
+        self.base_mut().set_global_position(new_pos);
+        if new_pos == self.target {
+            self.base_mut().queue_free()
+        }
     }
 }
 
@@ -125,7 +143,7 @@ impl Controller {
         Phase::from_index((self.time / 5.0) as i64)
     }
 
-    fn fulfill(&self, _character: &Character, task: Task) -> i64 {
+    fn fulfill(&self, character: &Character, task: Task) -> i64 {
         match task {
             Task::Eat => -1,
             Task::Sleep => {
@@ -133,22 +151,22 @@ impl Controller {
                 0
             }
             Task::Work => {
-                self.pick_apple();
+                self.pick_apple(character);
                 1
             }
         }
     }
 
-    fn pick_apple(&self) {
+    fn pick_apple(&self, character: &Character) {
         let spawn = self.apple_tree.as_ref().unwrap().bind().pick();
         let scene: Gd<PackedScene> = load("res://apple.tscn");
-        let mut apple = scene.instantiate_as::<Traveler>();
-        apple.bind_mut().speed = 150.0;
-        apple
-            .bind_mut()
-            .base_mut()
-            .set_global_position(spawn.get_global_position());
-        self.base().get_parent().unwrap().add_child(apple.upcast())
+        let apple = scene.instantiate_as::<Node2D>();
+        let mut traveler = Traveler::new(&spawn, &character.0);
+        traveler.add_child(apple.upcast());
+        self.base()
+            .get_parent()
+            .unwrap()
+            .add_child(traveler.upcast())
     }
 
     fn sun_transit(&mut self, old_phase: Phase, new_phase: Phase) {
@@ -190,7 +208,7 @@ impl INode for Controller {
         Self {
             time: 0.0,
             day: 0,
-            characters: vec![Character(), Character(), Character()],
+            characters: vec![],
             apples: 0,
             base,
             time_indicator: None,
@@ -205,5 +223,14 @@ impl INode for Controller {
         if old != self.phase() {
             self.sun_transit(old, self.phase())
         }
+    }
+
+    fn enter_tree(&mut self) {
+        self.base()
+            .get_tree()
+            .unwrap()
+            .get_nodes_in_group("characters".into())
+            .iter_shared()
+            .for_each(|node| self.characters.push(Character(node.cast())));
     }
 }

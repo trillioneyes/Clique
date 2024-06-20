@@ -16,6 +16,9 @@ position = Vector2(176, 118)
 [node name="Character3" parent="." groups=["characters"] instance=ExtResource("1_dbg47")]
 position = Vector2(177, 523)
 
+[node name="Character4" parent="." groups=["characters"] instance=ExtResource("1_dbg47")]
+position = Vector2(993, 89)
+
 [node name="Tree" parent="." instance=ExtResource("2_b7340")]
 position = Vector2(560, 301)
 scale = Vector2(1, 1)
