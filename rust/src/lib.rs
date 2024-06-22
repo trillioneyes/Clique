@@ -166,19 +166,40 @@ impl Item {
 }
 
 #[derive(GodotClass)]
-#[class(base=Node)]
+#[class(base=Node, no_init)]
 struct Controller {
     time: GameTime,
     queue: VecDeque<Item>,
+    time_indicator: Gd<Control>,
+    stockpile: Gd<Node2D>,
+    apple_tree: Gd<SampleChildren>,
+    characters: Vec<Character>,
+    apples: i64,
+    base: Base<Node>,
+}
+
+#[derive(GodotClass)]
+#[class(base=Node, init)]
+struct Cyst {
     #[export]
     time_indicator: Option<Gd<Control>>,
     #[export]
     stockpile: Option<Gd<Node2D>>,
     #[export]
     apple_tree: Option<Gd<SampleChildren>>,
-    characters: Vec<Character>,
-    apples: i64,
     base: Base<Node>,
+}
+
+impl Cyst {
+    fn parts(&mut self) -> Option<(Gd<Control>, Gd<Node2D>, Gd<SampleChildren>)> {
+        self.time_indicator.take().and_then(|time| {
+            self.stockpile.take().and_then(|stock| {
+                self.apple_tree
+                    .take()
+                    .and_then(|apples| Option::Some((time, stock, apples)))
+            })
+        })
+    }
 }
 
 #[derive(GodotClass)]
@@ -225,6 +246,21 @@ impl INode2D for Traveler {
 }
 
 impl Controller {
+    fn new(cyst: &mut Cyst) -> Option<Gd<Self>> {
+        cyst.parts().map(|(time, stock, tree)| {
+            Gd::from_init_fn(|base| Self {
+                queue: VecDeque::with_capacity(4),
+                time: GameTime::start(),
+                characters: vec![],
+                apples: 0,
+                base,
+                time_indicator: time,
+                stockpile: stock,
+                apple_tree: tree,
+            })
+        })
+    }
+
     fn fulfill(&self, character: &Character, task: Task) -> OutcomeChannel {
         match task {
             Task::Eat => Rc::new(OnceCell::from(Outcome::StatusQuo)),
@@ -255,13 +291,11 @@ impl Controller {
             Outcome::Apples { delta } => self.apples += delta,
         }
         self.stockpile
-            .as_mut()
-            .unwrap()
             .set("apples".into(), Variant::from(self.apples));
     }
 
     fn pick_apple(&self, character: &Character) -> Gd<Traveler> {
-        let spawn = self.apple_tree.as_ref().unwrap().bind().pick();
+        let spawn = self.apple_tree.bind().pick();
         let scene: Gd<PackedScene> = load("res://apple.tscn");
         let apple = scene.instantiate_as::<Node2D>();
         let mut traveler = Traveler::new(400.0, Outcome::StatusQuo, &spawn, &character.0);
@@ -280,7 +314,7 @@ impl Controller {
             1000.0,
             Outcome::Apples { delta: 1 },
             &character.0,
-            self.stockpile.as_ref().unwrap(),
+            &self.stockpile,
         );
         traveler.add_child(apple.upcast());
         self.base()
@@ -319,19 +353,6 @@ impl Controller {
 
 #[godot_api]
 impl INode for Controller {
-    fn init(base: Base<Node>) -> Self {
-        Self {
-            queue: VecDeque::with_capacity(4),
-            time: GameTime::start(),
-            characters: vec![],
-            apples: 0,
-            base,
-            time_indicator: None,
-            stockpile: None,
-            apple_tree: None,
-        }
-    }
-
     fn process(&mut self, delta: f64) {
         let current = self.queue.pop_front();
         match current {
@@ -352,15 +373,13 @@ impl INode for Controller {
                             .for_each(|outcome| self.apply(outcome)),
                         _ => (),
                     }
-                    self.time_indicator.as_mut().map(|ind| {
-                        ind.call(
-                            "set_time".into(),
-                            &[
-                                Variant::from(format!("{:?}", self.time.phase)),
-                                Variant::from(format!("{}", self.time.day)),
-                            ],
-                        )
-                    });
+                    self.time_indicator.call(
+                        "set_time".into(),
+                        &[
+                            Variant::from(format!("{:?}", self.time.phase)),
+                            Variant::from(format!("{}", self.time.day)),
+                        ],
+                    );
                 }
             }
         }
@@ -373,5 +392,12 @@ impl INode for Controller {
             .get_nodes_in_group("characters".into())
             .iter_shared()
             .for_each(|node| self.characters.push(Character(node.cast())));
+    }
+}
+
+#[godot_api]
+impl INode for Cyst {
+    fn enter_tree(&mut self) {
+        Controller::new(self).map(|controller| self.base_mut().add_child(controller.upcast()));
     }
 }

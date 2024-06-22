@@ -23,7 +23,7 @@ position = Vector2(993, 89)
 position = Vector2(560, 301)
 scale = Vector2(1, 1)
 
-[node name="Controller" type="Controller" parent="." node_paths=PackedStringArray("time_indicator", "stockpile", "apple_tree")]
+[node name="Controller" type="Cyst" parent="." node_paths=PackedStringArray("time_indicator", "stockpile", "apple_tree")]
 time_indicator = NodePath("../UI/Time indicator")
 stockpile = NodePath("../Stockpile")
 apple_tree = NodePath("../Tree")
