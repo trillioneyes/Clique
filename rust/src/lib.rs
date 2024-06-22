@@ -1,4 +1,6 @@
-use core::panic;
+use std::cell::OnceCell;
+use std::collections::VecDeque;
+use std::rc::Rc;
 
 use godot::engine::{Control, Node, Node2D};
 use godot::obj::WithBaseField;
@@ -38,6 +40,51 @@ enum Phase {
     Night,
 }
 
+#[derive(PartialEq, Debug, Clone, Copy)]
+enum SubPhase {
+    Commence,
+    Progress,
+    Complete,
+    Tempo,
+}
+
+impl SubPhase {
+    fn next(self) -> Self {
+        match self {
+            SubPhase::Commence => SubPhase::Progress,
+            SubPhase::Progress => SubPhase::Complete,
+            SubPhase::Complete => SubPhase::Tempo,
+            SubPhase::Tempo => SubPhase::Commence,
+        }
+    }
+}
+
+struct GameTime {
+    day: i64,
+    phase: Phase,
+    sub: SubPhase,
+}
+
+impl GameTime {
+    fn start() -> Self {
+        GameTime {
+            day: 1,
+            phase: Phase::Predawn,
+            sub: SubPhase::Tempo,
+        }
+    }
+
+    fn next(&mut self) {
+        self.sub = self.sub.next();
+        if self.sub == SubPhase::Commence {
+            self.phase = self.phase.next();
+            if self.phase == Phase::Predawn {
+                self.day += 1;
+            }
+        }
+    }
+}
+
 impl Phase {
     fn next(&self) -> Self {
         match self {
@@ -46,17 +93,6 @@ impl Phase {
             Phase::Midday => Phase::Evening,
             Phase::Evening => Phase::Night,
             Phase::Night => Phase::Predawn,
-        }
-    }
-
-    fn from_index(i: i64) -> Self {
-        match i % 5 {
-            0 => Phase::Predawn,
-            1 => Phase::Morning,
-            2 => Phase::Midday,
-            3 => Phase::Evening,
-            4 => Phase::Night,
-            _ => panic!("Impossible"),
         }
     }
 }
@@ -80,13 +116,48 @@ impl SampleChildren {
     }
 }
 
+#[derive(Clone)]
+enum Outcome {
+    StatusQuo,
+    Apples { delta: i64 },
+}
+
+impl Default for Outcome {
+    fn default() -> Self {
+        Outcome::StatusQuo
+    }
+}
+
+type OutcomeChannel = Rc<OnceCell<Outcome>>;
+
+enum Item {
+    Wait { seconds: f64 },
+    Play(Vec<OutcomeChannel>),
+}
+
+impl Item {
+    fn finished(&self) -> bool {
+        match self {
+            Item::Wait { seconds } => *seconds <= 0.0,
+            Item::Play(cells) => cells.iter().all(|cell| cell.get().is_some()),
+        }
+    }
+
+    fn tick(self, delta: f64) -> Self {
+        match self {
+            Item::Wait { seconds } => Item::Wait {
+                seconds: seconds - delta,
+            },
+            _ => self,
+        }
+    }
+}
+
 #[derive(GodotClass)]
 #[class(base=Node)]
 struct Controller {
-    #[export]
-    time: f64,
-    #[export]
-    day: i64,
+    time: GameTime,
+    queue: VecDeque<Item>,
     #[export]
     time_indicator: Option<Gd<Control>>,
     #[export]
@@ -104,17 +175,21 @@ struct Traveler {
     #[export]
     velocity: Vector2,
     target: Vector2,
+    result: Outcome,
+    signal: OutcomeChannel,
     base: Base<Node2D>,
 }
 
 impl Traveler {
-    fn new(from: &Node2D, to: &Node2D) -> Gd<Self> {
+    fn new(result: Outcome, from: &Node2D, to: &Node2D) -> Gd<Self> {
         let speed: f32 = 300.0;
         let start = from.get_global_position();
         let end = to.get_global_position();
         let velocity = (end - start).normalized() * speed;
         let mut traveler = Gd::from_init_fn(|base| Traveler {
             velocity,
+            result,
+            signal: Rc::new(OnceCell::new()),
             target: end,
             base,
         });
@@ -133,72 +208,97 @@ impl INode2D for Traveler {
             .move_toward(self.target, displacement.length());
         self.base_mut().set_global_position(new_pos);
         if new_pos == self.target {
+            let _ = self.signal.set(self.result.clone());
             self.base_mut().queue_free()
         }
     }
 }
 
 impl Controller {
-    fn phase(&self) -> Phase {
-        Phase::from_index((self.time / 5.0) as i64)
-    }
-
-    fn fulfill(&self, character: &Character, task: Task) -> i64 {
+    fn fulfill(&self, character: &Character, task: Task) -> OutcomeChannel {
         match task {
-            Task::Eat => -1,
-            Task::Sleep => {
-                godot_print!("Zzzzz");
-                0
-            }
+            Task::Eat => Rc::new(OnceCell::from(Outcome::StatusQuo)),
+            Task::Sleep => Rc::new(OnceCell::from(Outcome::StatusQuo)),
             Task::Work => {
-                self.pick_apple(character);
-                1
+                let traveler = self.pick_apple(character);
+                let outcome = traveler.bind().signal.clone();
+                outcome
             }
         }
     }
 
-    fn pick_apple(&self, character: &Character) {
+    fn finish(&self, character: &Character, task: Task) -> OutcomeChannel {
+        match task {
+            Task::Eat => Rc::new(OnceCell::from(Outcome::Apples { delta: -1 })),
+            Task::Sleep => Rc::new(OnceCell::from(Outcome::StatusQuo)),
+            Task::Work => {
+                let traveler = self.store_apple(character);
+                let outcome = traveler.bind().signal.clone();
+                outcome
+            }
+        }
+    }
+
+    fn apply(&mut self, o: &Outcome) {
+        match o {
+            Outcome::StatusQuo => (),
+            Outcome::Apples { delta } => self.apples += delta,
+        }
+    }
+
+    fn pick_apple(&self, character: &Character) -> Gd<Traveler> {
         let spawn = self.apple_tree.as_ref().unwrap().bind().pick();
         let scene: Gd<PackedScene> = load("res://apple.tscn");
         let apple = scene.instantiate_as::<Node2D>();
-        let mut traveler = Traveler::new(&spawn, &character.0);
+        let mut traveler = Traveler::new(Outcome::StatusQuo, &spawn, &character.0);
         traveler.add_child(apple.upcast());
         self.base()
             .get_parent()
             .unwrap()
-            .add_child(traveler.upcast())
+            .add_child(traveler.clone().upcast());
+        traveler
     }
 
-    fn sun_transit(&mut self, old_phase: Phase, new_phase: Phase) {
-        if new_phase == Phase::Predawn {
-            self.day += 1;
-        } else if new_phase == Phase::Morning {
-            godot_print!("The sun rises on day {}!", self.day)
-        }
-        let mut delta_apples = 0;
+    fn store_apple(&self, character: &Character) -> Gd<Traveler> {
+        let scene: Gd<PackedScene> = load("res://apple.tscn");
+        let apple = scene.instantiate_as::<Node2D>();
+        let mut traveler = Traveler::new(
+            Outcome::Apples { delta: 1 },
+            &character.0,
+            self.stockpile.as_ref().unwrap(),
+        );
+        traveler.add_child(apple.upcast());
+        self.base()
+            .get_parent()
+            .unwrap()
+            .add_child(traveler.clone().upcast());
+        traveler
+    }
+
+    fn character_actions(&self) -> Item {
+        let mut actions = vec![];
         for c in self.characters.iter() {
-            let task = c.decide(old_phase);
-            delta_apples += self.fulfill(c, task);
+            let task = c.decide(self.time.phase);
+            actions.push(self.fulfill(c, task));
         }
-        self.apples += delta_apples;
-        self.time_indicator.as_mut().map(|ind| {
-            ind.call(
-                "set_time".into(),
-                &[
-                    Variant::from(format!("{:?}", new_phase)),
-                    Variant::from(format!("{}", self.day)),
-                ],
-            )
-        });
-        self.stockpile
-            .as_mut()
-            .map(|pile| pile.set("apples".into(), Variant::from(self.apples)));
-        godot_print!(
-            "Phase transition from {:?} to {:?}: apple stockpile at {}.",
-            old_phase,
-            new_phase,
-            self.apples
-        )
+        Item::Play(actions)
+    }
+
+    fn character_cleanup(&self) -> Item {
+        let mut cleanups = vec![];
+        for c in self.characters.iter() {
+            let task = c.decide(self.time.phase);
+            cleanups.push(self.finish(c, task));
+        }
+        Item::Play(cleanups)
+    }
+
+    fn schedule_item(&self) -> Item {
+        match self.time.sub {
+            SubPhase::Commence => self.character_actions(),
+            SubPhase::Complete => self.character_cleanup(),
+            _ => Item::Wait { seconds: 0.5 },
+        }
     }
 }
 
@@ -206,8 +306,8 @@ impl Controller {
 impl INode for Controller {
     fn init(base: Base<Node>) -> Self {
         Self {
-            time: 0.0,
-            day: 0,
+            queue: VecDeque::with_capacity(4),
+            time: GameTime::start(),
             characters: vec![],
             apples: 0,
             base,
@@ -218,10 +318,37 @@ impl INode for Controller {
     }
 
     fn process(&mut self, delta: f64) {
-        let old = self.phase();
-        self.time += delta;
-        if old != self.phase() {
-            self.sun_transit(old, self.phase())
+        let current = self.queue.pop_front();
+        match current {
+            None => self.queue.push_back(self.schedule_item()),
+            Some(current) => {
+                let current = current.tick(delta);
+                if !current.finished() {
+                    self.queue.push_front(current);
+                } else {
+                    self.time.next();
+                    match current {
+                        Item::Play(outcomes) => outcomes
+                            .iter()
+                            .filter_map(|rc_cell| rc_cell.get())
+                            .for_each(|outcome| self.apply(outcome)),
+                        _ => (),
+                    }
+                    self.stockpile
+                        .as_mut()
+                        .unwrap()
+                        .set("apples".into(), Variant::from(self.apples));
+                    self.time_indicator.as_mut().map(|ind| {
+                        ind.call(
+                            "set_time".into(),
+                            &[
+                                Variant::from(format!("{:?}", self.time.phase)),
+                                Variant::from(format!("{}", self.time.day)),
+                            ],
+                        )
+                    });
+                }
+            }
         }
     }
 
