@@ -143,12 +143,24 @@ impl Item {
         }
     }
 
-    fn tick(self, delta: f64) -> Self {
+    fn tick(self, delta: f64) -> (Vec<Outcome>, Self) {
         match self {
-            Item::Wait { seconds } => Item::Wait {
-                seconds: seconds - delta,
-            },
-            _ => self,
+            Item::Wait { seconds } => (
+                vec![],
+                Item::Wait {
+                    seconds: seconds - delta,
+                },
+            ),
+            Item::Play(outcomes) => {
+                let (done, not): (Vec<OutcomeChannel>, Vec<OutcomeChannel>) = outcomes
+                    .into_iter()
+                    .partition(|outcome_cell| outcome_cell.get().is_some());
+                let done = done
+                    .into_iter()
+                    .map(|outcome_cell| outcome_cell.get().unwrap().clone())
+                    .collect();
+                (done, Item::Play(not))
+            }
         }
     }
 }
@@ -172,7 +184,6 @@ struct Controller {
 #[derive(GodotClass)]
 #[class(base=Node2D, init)]
 struct Traveler {
-    #[export]
     velocity: Vector2,
     target: Vector2,
     result: Outcome,
@@ -181,8 +192,7 @@ struct Traveler {
 }
 
 impl Traveler {
-    fn new(result: Outcome, from: &Node2D, to: &Node2D) -> Gd<Self> {
-        let speed: f32 = 300.0;
+    fn new(speed: f32, result: Outcome, from: &Node2D, to: &Node2D) -> Gd<Self> {
         let start = from.get_global_position();
         let end = to.get_global_position();
         let velocity = (end - start).normalized() * speed;
@@ -244,13 +254,17 @@ impl Controller {
             Outcome::StatusQuo => (),
             Outcome::Apples { delta } => self.apples += delta,
         }
+        self.stockpile
+            .as_mut()
+            .unwrap()
+            .set("apples".into(), Variant::from(self.apples));
     }
 
     fn pick_apple(&self, character: &Character) -> Gd<Traveler> {
         let spawn = self.apple_tree.as_ref().unwrap().bind().pick();
         let scene: Gd<PackedScene> = load("res://apple.tscn");
         let apple = scene.instantiate_as::<Node2D>();
-        let mut traveler = Traveler::new(Outcome::StatusQuo, &spawn, &character.0);
+        let mut traveler = Traveler::new(400.0, Outcome::StatusQuo, &spawn, &character.0);
         traveler.add_child(apple.upcast());
         self.base()
             .get_parent()
@@ -263,6 +277,7 @@ impl Controller {
         let scene: Gd<PackedScene> = load("res://apple.tscn");
         let apple = scene.instantiate_as::<Node2D>();
         let mut traveler = Traveler::new(
+            1000.0,
             Outcome::Apples { delta: 1 },
             &character.0,
             self.stockpile.as_ref().unwrap(),
@@ -322,7 +337,10 @@ impl INode for Controller {
         match current {
             None => self.queue.push_back(self.schedule_item()),
             Some(current) => {
-                let current = current.tick(delta);
+                let (outcomes, current) = current.tick(delta);
+                for outcome in &outcomes {
+                    self.apply(outcome)
+                }
                 if !current.finished() {
                     self.queue.push_front(current);
                 } else {
@@ -334,10 +352,6 @@ impl INode for Controller {
                             .for_each(|outcome| self.apply(outcome)),
                         _ => (),
                     }
-                    self.stockpile
-                        .as_mut()
-                        .unwrap()
-                        .set("apples".into(), Variant::from(self.apples));
                     self.time_indicator.as_mut().map(|ind| {
                         ind.call(
                             "set_time".into(),
