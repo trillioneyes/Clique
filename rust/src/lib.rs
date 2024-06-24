@@ -131,65 +131,96 @@ impl Default for Outcome {
 #[derive(Default, Clone)]
 struct OutcomeChannel {
     cell: Rc<OnceCell<Outcome>>,
+    outcome: Outcome,
 }
 
 impl OutcomeChannel {
-    fn new() -> Self {
+    fn new(outcome: Outcome) -> Self {
         OutcomeChannel {
             cell: Rc::new(OnceCell::new()),
+            outcome,
         }
     }
 
-    fn finished(&self) -> bool {
-        self.cell.get().is_some()
+    fn check(self) -> (Option<Outcome>, Option<Self>) {
+        if let Some(outcome) = self.cell.get() {
+            (Some(outcome.clone()), None)
+        } else {
+            (None, Some(self))
+        }
     }
 
-    fn take(self) -> Outcome {
-        self.cell.get().unwrap().clone()
-    }
-
-    fn set(&self, outcome: &Outcome) {
-        let _ = self.cell.set(outcome.clone());
-    }
-
-    fn get(&self) -> Option<&Outcome> {
-        self.cell.get()
+    fn fire(&self) {
+        let _ = self.cell.set(self.outcome.clone());
     }
 
     fn from(outcome: Outcome) -> Self {
         OutcomeChannel {
-            cell: Rc::new(OnceCell::from(outcome)),
+            cell: Rc::new(OnceCell::from(outcome.clone())),
+            outcome,
+        }
+    }
+}
+
+struct OutcomeMux {
+    channels: Vec<OutcomeChannel>,
+}
+
+impl OutcomeMux {
+    fn tick(self) -> (Vec<Outcome>, Option<Self>) {
+        let mut done: Vec<Outcome> = vec![];
+        let mut remaining: Vec<OutcomeChannel> = vec![];
+        self.channels.into_iter().for_each(|channel| {
+            let (outcome, rest) = channel.check();
+            outcome.map(|outcome| done.push(outcome));
+            rest.map(|rest| remaining.push(rest));
+        });
+        (
+            done,
+            if remaining.is_empty() {
+                None
+            } else {
+                Some(OutcomeMux {
+                    channels: remaining,
+                })
+            },
+        )
+    }
+
+    fn is_empty(&self) -> bool {
+        self.channels.is_empty()
+    }
+
+    fn from(channels: impl IntoIterator<Item = OutcomeChannel>) -> Self {
+        OutcomeMux {
+            channels: channels.into_iter().collect(),
         }
     }
 }
 
 enum Item {
     Wait { seconds: f64 },
-    Play(Vec<OutcomeChannel>),
+    Play(OutcomeMux),
 }
 
 impl Item {
-    fn finished(&self) -> bool {
+    fn tick(self, delta: f64) -> (Vec<Outcome>, Option<Self>) {
         match self {
-            Item::Wait { seconds } => *seconds <= 0.0,
-            Item::Play(cells) => cells.iter().all(OutcomeChannel::finished),
-        }
-    }
-
-    fn tick(self, delta: f64) -> (Vec<Outcome>, Self) {
-        match self {
-            Item::Wait { seconds } => (
-                vec![],
-                Item::Wait {
-                    seconds: seconds - delta,
-                },
-            ),
-            Item::Play(outcomes) => {
-                let (done, not): (Vec<OutcomeChannel>, Vec<OutcomeChannel>) =
-                    outcomes.into_iter().partition(OutcomeChannel::finished);
-                let done = done.into_iter().map(OutcomeChannel::take).collect();
-                (done, Item::Play(not))
+            Item::Wait { seconds } => {
+                if seconds >= delta {
+                    (
+                        vec![],
+                        Some(Item::Wait {
+                            seconds: seconds - delta,
+                        }),
+                    )
+                } else {
+                    (vec![], None)
+                }
             }
+            Item::Play(outcomes) => match outcomes.tick() {
+                (done, left) => (done, left.map(Item::Play)),
+            },
         }
     }
 }
@@ -236,7 +267,6 @@ impl Cyst {
 struct Traveler {
     velocity: Vector2,
     target: Vector2,
-    result: Outcome,
     signal: OutcomeChannel,
     base: Base<Node2D>,
 }
@@ -248,8 +278,7 @@ impl Traveler {
         let velocity = (end - start).normalized() * speed;
         let mut traveler = Gd::from_init_fn(|base| Traveler {
             velocity,
-            result,
-            signal: OutcomeChannel::new(),
+            signal: OutcomeChannel::new(result),
             target: end,
             base,
         });
@@ -268,7 +297,7 @@ impl INode2D for Traveler {
             .move_toward(self.target, displacement.length());
         self.base_mut().set_global_position(new_pos);
         if new_pos == self.target {
-            self.signal.set(&self.result);
+            self.signal.fire();
             self.base_mut().queue_free()
         }
     }
@@ -359,7 +388,7 @@ impl Controller {
             let task = c.decide(self.time.phase);
             actions.push(self.fulfill(c, task));
         }
-        Item::Play(actions)
+        Item::Play(OutcomeMux::from(actions))
     }
 
     fn character_cleanup(&self) -> Item {
@@ -368,7 +397,7 @@ impl Controller {
             let task = c.decide(self.time.phase);
             cleanups.push(self.finish(c, task));
         }
-        Item::Play(cleanups)
+        Item::Play(OutcomeMux::from(cleanups))
     }
 
     fn schedule_item(&self) -> Item {
@@ -387,29 +416,21 @@ impl INode for Controller {
         match current {
             None => self.queue.push_back(self.schedule_item()),
             Some(current) => {
-                let (outcomes, current) = current.tick(delta);
+                let (outcomes, next) = current.tick(delta);
                 for outcome in &outcomes {
                     self.apply(outcome)
                 }
-                if !current.finished() {
-                    self.queue.push_front(current);
-                } else {
-                    self.time.next();
-                    match current {
-                        Item::Play(outcomes) => outcomes
-                            .iter()
-                            .filter_map(OutcomeChannel::get)
-                            .for_each(|outcome| self.apply(outcome)),
-                        _ => (),
-                    }
-                    self.time_indicator.call(
-                        "set_time".into(),
-                        &[
-                            Variant::from(format!("{:?}", self.time.phase)),
-                            Variant::from(format!("{}", self.time.day)),
-                        ],
-                    );
+                match next {
+                    Some(next) => self.queue.push_front(next),
+                    None => self.time.next(),
                 }
+                self.time_indicator.call(
+                    "set_time".into(),
+                    &[
+                        Variant::from(format!("{:?}", self.time.phase)),
+                        Variant::from(format!("{}", self.time.day)),
+                    ],
+                );
             }
         }
     }
