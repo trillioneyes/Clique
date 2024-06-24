@@ -128,7 +128,40 @@ impl Default for Outcome {
     }
 }
 
-type OutcomeChannel = Rc<OnceCell<Outcome>>;
+#[derive(Default, Clone)]
+struct OutcomeChannel {
+    cell: Rc<OnceCell<Outcome>>,
+}
+
+impl OutcomeChannel {
+    fn new() -> Self {
+        OutcomeChannel {
+            cell: Rc::new(OnceCell::new()),
+        }
+    }
+
+    fn finished(&self) -> bool {
+        self.cell.get().is_some()
+    }
+
+    fn take(self) -> Outcome {
+        self.cell.get().unwrap().clone()
+    }
+
+    fn set(&self, outcome: &Outcome) {
+        let _ = self.cell.set(outcome.clone());
+    }
+
+    fn get(&self) -> Option<&Outcome> {
+        self.cell.get()
+    }
+
+    fn from(outcome: Outcome) -> Self {
+        OutcomeChannel {
+            cell: Rc::new(OnceCell::from(outcome)),
+        }
+    }
+}
 
 enum Item {
     Wait { seconds: f64 },
@@ -139,7 +172,7 @@ impl Item {
     fn finished(&self) -> bool {
         match self {
             Item::Wait { seconds } => *seconds <= 0.0,
-            Item::Play(cells) => cells.iter().all(|cell| cell.get().is_some()),
+            Item::Play(cells) => cells.iter().all(OutcomeChannel::finished),
         }
     }
 
@@ -152,13 +185,9 @@ impl Item {
                 },
             ),
             Item::Play(outcomes) => {
-                let (done, not): (Vec<OutcomeChannel>, Vec<OutcomeChannel>) = outcomes
-                    .into_iter()
-                    .partition(|outcome_cell| outcome_cell.get().is_some());
-                let done = done
-                    .into_iter()
-                    .map(|outcome_cell| outcome_cell.get().unwrap().clone())
-                    .collect();
+                let (done, not): (Vec<OutcomeChannel>, Vec<OutcomeChannel>) =
+                    outcomes.into_iter().partition(OutcomeChannel::finished);
+                let done = done.into_iter().map(OutcomeChannel::take).collect();
                 (done, Item::Play(not))
             }
         }
@@ -220,7 +249,7 @@ impl Traveler {
         let mut traveler = Gd::from_init_fn(|base| Traveler {
             velocity,
             result,
-            signal: Rc::new(OnceCell::new()),
+            signal: OutcomeChannel::new(),
             target: end,
             base,
         });
@@ -239,7 +268,7 @@ impl INode2D for Traveler {
             .move_toward(self.target, displacement.length());
         self.base_mut().set_global_position(new_pos);
         if new_pos == self.target {
-            let _ = self.signal.set(self.result.clone());
+            self.signal.set(&self.result);
             self.base_mut().queue_free()
         }
     }
@@ -263,8 +292,8 @@ impl Controller {
 
     fn fulfill(&self, character: &Character, task: Task) -> OutcomeChannel {
         match task {
-            Task::Eat => Rc::new(OnceCell::from(Outcome::StatusQuo)),
-            Task::Sleep => Rc::new(OnceCell::from(Outcome::StatusQuo)),
+            Task::Eat => OutcomeChannel::from(Outcome::StatusQuo),
+            Task::Sleep => OutcomeChannel::from(Outcome::StatusQuo),
             Task::Work => {
                 let traveler = self.pick_apple(character);
                 let outcome = traveler.bind().signal.clone();
@@ -275,8 +304,8 @@ impl Controller {
 
     fn finish(&self, character: &Character, task: Task) -> OutcomeChannel {
         match task {
-            Task::Eat => Rc::new(OnceCell::from(Outcome::Apples { delta: -1 })),
-            Task::Sleep => Rc::new(OnceCell::from(Outcome::StatusQuo)),
+            Task::Eat => OutcomeChannel::from(Outcome::Apples { delta: -1 }),
+            Task::Sleep => OutcomeChannel::from(Outcome::StatusQuo),
             Task::Work => {
                 let traveler = self.store_apple(character);
                 let outcome = traveler.bind().signal.clone();
@@ -369,7 +398,7 @@ impl INode for Controller {
                     match current {
                         Item::Play(outcomes) => outcomes
                             .iter()
-                            .filter_map(|rc_cell| rc_cell.get())
+                            .filter_map(OutcomeChannel::get)
                             .for_each(|outcome| self.apply(outcome)),
                         _ => (),
                     }
