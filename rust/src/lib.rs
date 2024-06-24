@@ -187,10 +187,6 @@ impl OutcomeMux {
         )
     }
 
-    fn is_empty(&self) -> bool {
-        self.channels.is_empty()
-    }
-
     fn from(channels: impl IntoIterator<Item = OutcomeChannel>) -> Self {
         OutcomeMux {
             channels: channels.into_iter().collect(),
