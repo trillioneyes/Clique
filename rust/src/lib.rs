@@ -1,4 +1,4 @@
-use std::cell::OnceCell;
+use std::cell::Cell;
 use std::collections::VecDeque;
 use std::rc::Rc;
 
@@ -130,35 +130,48 @@ impl Default for Outcome {
 
 #[derive(Default, Clone)]
 struct OutcomeChannel {
-    cell: Rc<OnceCell<Outcome>>,
-    outcome: Outcome,
+    cell: Rc<Vec<Outcome>>,
+    consumed: Rc<Cell<usize>>,
+    available: Rc<Cell<usize>>,
 }
 
 impl OutcomeChannel {
-    fn new(outcome: Outcome) -> Self {
+    fn new(events: Vec<Outcome>, start: usize) -> Self {
         OutcomeChannel {
-            cell: Rc::new(OnceCell::new()),
-            outcome,
+            cell: Rc::new(events),
+            consumed: Rc::new(Cell::new(0)),
+            available: Rc::new(Cell::new(start)),
         }
     }
 
     fn check(self) -> (Option<Outcome>, Option<Self>) {
-        if let Some(outcome) = self.cell.get() {
-            (Some(outcome.clone()), None)
-        } else {
+        if self.consumed.get() >= self.cell.len() {
+            (None, None)
+        } else if self.consumed.get() < self.available.get() {
+            let i = self.consumed.get();
+            self.consumed.set(i + 1);
+            (Some(self.cell.get(i).unwrap().clone()), Some(self))
+        } else if self.available.get() < self.cell.len() {
             (None, Some(self))
+        } else {
+            (None, None)
         }
     }
 
     fn fire(&self) {
-        let _ = self.cell.set(self.outcome.clone());
+        self.available.set(self.available.get() + 1)
     }
 
-    fn from(outcome: Outcome) -> Self {
-        OutcomeChannel {
-            cell: Rc::new(OnceCell::from(outcome.clone())),
-            outcome,
-        }
+    fn immediate(outcome: Outcome) -> Self {
+        OutcomeChannel::new(vec![outcome], 1)
+    }
+
+    fn delayed(outcome: Outcome) -> Self {
+        OutcomeChannel::new(vec![outcome], 0)
+    }
+
+    fn empty() -> Self {
+        OutcomeChannel::new(vec![Outcome::StatusQuo], 0)
     }
 }
 
@@ -268,13 +281,13 @@ struct Traveler {
 }
 
 impl Traveler {
-    fn new(speed: f32, result: Outcome, from: &Node2D, to: &Node2D) -> Gd<Self> {
+    fn new(speed: f32, result: OutcomeChannel, from: &Node2D, to: &Node2D) -> Gd<Self> {
         let start = from.get_global_position();
         let end = to.get_global_position();
         let velocity = (end - start).normalized() * speed;
         let mut traveler = Gd::from_init_fn(|base| Traveler {
             velocity,
-            signal: OutcomeChannel::new(result),
+            signal: result,
             target: end,
             base,
         });
@@ -317,8 +330,12 @@ impl Controller {
 
     fn fulfill(&self, character: &Character, task: Task) -> OutcomeChannel {
         match task {
-            Task::Eat => OutcomeChannel::from(Outcome::StatusQuo),
-            Task::Sleep => OutcomeChannel::from(Outcome::StatusQuo),
+            Task::Eat => {
+                let traveler = self.eat_apple(character);
+                let outcome = traveler.bind().signal.clone();
+                outcome
+            }
+            Task::Sleep => OutcomeChannel::immediate(Outcome::StatusQuo),
             Task::Work => {
                 let traveler = self.pick_apple(character);
                 let outcome = traveler.bind().signal.clone();
@@ -329,8 +346,8 @@ impl Controller {
 
     fn finish(&self, character: &Character, task: Task) -> OutcomeChannel {
         match task {
-            Task::Eat => OutcomeChannel::from(Outcome::Apples { delta: -1 }),
-            Task::Sleep => OutcomeChannel::from(Outcome::StatusQuo),
+            Task::Eat => OutcomeChannel::immediate(Outcome::StatusQuo),
+            Task::Sleep => OutcomeChannel::immediate(Outcome::StatusQuo),
             Task::Work => {
                 let traveler = self.store_apple(character);
                 let outcome = traveler.bind().signal.clone();
@@ -352,7 +369,24 @@ impl Controller {
         let spawn = self.apple_tree.bind().pick();
         let scene: Gd<PackedScene> = load("res://apple.tscn");
         let apple = scene.instantiate_as::<Node2D>();
-        let mut traveler = Traveler::new(400.0, Outcome::StatusQuo, &spawn, &character.0);
+        let mut traveler = Traveler::new(400.0, OutcomeChannel::empty(), &spawn, &character.0);
+        traveler.add_child(apple.upcast());
+        self.base()
+            .get_parent()
+            .unwrap()
+            .add_child(traveler.clone().upcast());
+        traveler
+    }
+
+    fn eat_apple(&self, character: &Character) -> Gd<Traveler> {
+        let scene: Gd<PackedScene> = load("res://apple.tscn");
+        let apple = scene.instantiate_as::<Node2D>();
+        let mut traveler = Traveler::new(
+            1000.0,
+            OutcomeChannel::new(vec![Outcome::Apples { delta: -1 }, Outcome::StatusQuo], 1),
+            &self.stockpile,
+            &character.0,
+        );
         traveler.add_child(apple.upcast());
         self.base()
             .get_parent()
@@ -366,7 +400,7 @@ impl Controller {
         let apple = scene.instantiate_as::<Node2D>();
         let mut traveler = Traveler::new(
             1000.0,
-            Outcome::Apples { delta: 1 },
+            OutcomeChannel::delayed(Outcome::Apples { delta: 1 }),
             &character.0,
             &self.stockpile,
         );
