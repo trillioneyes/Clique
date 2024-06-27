@@ -294,6 +294,12 @@ impl Traveler {
         traveler.set_global_position(start);
         traveler
     }
+
+    fn load_child(&mut self, scene: &str) {
+        let scene: Gd<PackedScene> = load(scene);
+        let node = scene.instantiate_as::<Node>();
+        self.base_mut().add_child(node);
+    }
 }
 
 #[godot_api]
@@ -365,50 +371,39 @@ impl Controller {
             .set("apples".into(), Variant::from(self.apples));
     }
 
+    fn spawn_sibling(&self, sib: Gd<impl Inherits<Node>>) {
+        self.base().get_parent().unwrap().add_child(sib.upcast())
+    }
+
     fn pick_apple(&self, character: &Character) -> Gd<Traveler> {
         let spawn = self.apple_tree.bind().pick();
-        let scene: Gd<PackedScene> = load("res://apple.tscn");
-        let apple = scene.instantiate_as::<Node2D>();
         let mut traveler = Traveler::new(400.0, OutcomeChannel::empty(), &spawn, &character.0);
-        traveler.add_child(apple.upcast());
-        self.base()
-            .get_parent()
-            .unwrap()
-            .add_child(traveler.clone().upcast());
+        traveler.bind_mut().load_child("res://apple.tscn");
+	self.spawn_sibling(traveler.clone());
         traveler
     }
 
     fn eat_apple(&self, character: &Character) -> Gd<Traveler> {
-        let scene: Gd<PackedScene> = load("res://apple.tscn");
-        let apple = scene.instantiate_as::<Node2D>();
         let mut traveler = Traveler::new(
             1000.0,
             OutcomeChannel::new(vec![Outcome::Apples { delta: -1 }, Outcome::StatusQuo], 1),
             &self.stockpile,
             &character.0,
         );
-        traveler.add_child(apple.upcast());
-        self.base()
-            .get_parent()
-            .unwrap()
-            .add_child(traveler.clone().upcast());
+        traveler.bind_mut().load_child("res://apple.tscn");
+        self.spawn_sibling(traveler.clone());
         traveler
     }
 
     fn store_apple(&self, character: &Character) -> Gd<Traveler> {
-        let scene: Gd<PackedScene> = load("res://apple.tscn");
-        let apple = scene.instantiate_as::<Node2D>();
         let mut traveler = Traveler::new(
             1000.0,
             OutcomeChannel::delayed(Outcome::Apples { delta: 1 }),
             &character.0,
             &self.stockpile,
         );
-        traveler.add_child(apple.upcast());
-        self.base()
-            .get_parent()
-            .unwrap()
-            .add_child(traveler.clone().upcast());
+        traveler.bind_mut().load_child("res://apple.tscn");
+        self.spawn_sibling(traveler.clone());
         traveler
     }
 
