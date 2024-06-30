@@ -379,7 +379,7 @@ impl Controller {
         let spawn = self.apple_tree.bind().pick();
         let mut traveler = Traveler::new(400.0, OutcomeChannel::empty(), &spawn, &character.0);
         traveler.bind_mut().load_child("res://apple.tscn");
-	self.spawn_sibling(traveler.clone());
+        self.spawn_sibling(traveler.clone());
         traveler
     }
 
