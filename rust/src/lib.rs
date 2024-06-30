@@ -99,6 +99,11 @@ impl SubPhase {
     }
 }
 
+enum Season {
+    Summer,
+    Winter,
+}
+
 struct GameTime {
     day: i64,
     phase: Phase,
@@ -121,6 +126,14 @@ impl GameTime {
             if self.phase == Phase::Predawn {
                 self.day += 1;
             }
+        }
+    }
+
+    fn season(&self) -> Season {
+        if (self.day / 5) % 4 == 3 {
+            Season::Winter
+        } else {
+            Season::Summer
         }
     }
 }
@@ -210,8 +223,12 @@ impl OutcomeChannel {
         OutcomeChannel::new(vec![outcome], 0)
     }
 
-    fn empty() -> Self {
+    fn delayed_noop() -> Self {
         OutcomeChannel::new(vec![Outcome::StatusQuo], 0)
+    }
+
+    fn immediate_noop() -> Self {
+        OutcomeChannel::immediate(Outcome::StatusQuo)
     }
 }
 
@@ -376,29 +393,20 @@ impl Controller {
 
     fn fulfill(&self, character: &Character, task: Task) -> OutcomeChannel {
         match task {
-            Task::Eat => {
-                let traveler = self.eat_apple(character);
-                let outcome = traveler.bind().signal.clone();
-                outcome
-            }
-            Task::Sleep => OutcomeChannel::immediate(Outcome::StatusQuo),
-            Task::Work => {
-                let traveler = self.pick_apple(character);
-                let outcome = traveler.bind().signal.clone();
-                outcome
-            }
+            Task::Eat => self.eat_apple(character),
+            Task::Sleep => OutcomeChannel::immediate_noop(),
+            Task::Work => self.pick_apple(character),
         }
     }
 
     fn finish(&self, character: &Character, task: Task) -> OutcomeChannel {
         match task {
-            Task::Eat => OutcomeChannel::immediate(Outcome::StatusQuo),
-            Task::Sleep => OutcomeChannel::immediate(Outcome::StatusQuo),
-            Task::Work => {
-                let traveler = self.store_apple(character);
-                let outcome = traveler.bind().signal.clone();
-                outcome
-            }
+            Task::Eat => OutcomeChannel::immediate_noop(),
+            Task::Sleep => OutcomeChannel::immediate_noop(),
+            Task::Work => match self.time.season() {
+                Season::Summer => self.store_apple(character),
+                Season::Winter => OutcomeChannel::immediate_noop(),
+            },
         }
     }
 
@@ -415,37 +423,45 @@ impl Controller {
         self.base().get_parent().unwrap().add_child(sib.upcast())
     }
 
-    fn pick_apple(&self, character: &Character) -> Gd<Traveler> {
-        let spawn = self.apple_tree.bind().pick();
-        let mut traveler =
-            Traveler::new(400.0, OutcomeChannel::empty(), &spawn, &character.graphics);
+    fn send_apple(
+        &self,
+        speed: f32,
+        ch: OutcomeChannel,
+        from: &Node2D,
+        to: &Node2D,
+    ) -> OutcomeChannel {
+        let mut traveler = Traveler::new(speed, ch.clone(), from, to);
         traveler.bind_mut().load_child("res://apple.tscn");
-        self.spawn_sibling(traveler.clone());
-        traveler
+        self.spawn_sibling(traveler);
+        ch
     }
 
-    fn eat_apple(&self, character: &Character) -> Gd<Traveler> {
-        let mut traveler = Traveler::new(
+    fn pick_apple(&self, character: &Character) -> OutcomeChannel {
+        let spawn = self.apple_tree.bind().pick();
+        self.send_apple(
+            400.0,
+            OutcomeChannel::delayed_noop(),
+            &spawn,
+            &character.graphics,
+        )
+    }
+
+    fn eat_apple(&self, character: &Character) -> OutcomeChannel {
+        self.send_apple(
             1000.0,
             OutcomeChannel::new(vec![Outcome::Apples { delta: -1 }, Outcome::StatusQuo], 1),
             &self.stockpile,
             &character.graphics,
-        );
-        traveler.bind_mut().load_child("res://apple.tscn");
-        self.spawn_sibling(traveler.clone());
-        traveler
+        )
     }
 
-    fn store_apple(&self, character: &Character) -> Gd<Traveler> {
-        let mut traveler = Traveler::new(
+    fn store_apple(&self, character: &Character) -> OutcomeChannel {
+        self.send_apple(
             1000.0,
             OutcomeChannel::delayed(Outcome::Apples { delta: 1 }),
             &character.graphics,
             &self.stockpile,
-        );
-        traveler.bind_mut().load_child("res://apple.tscn");
-        self.spawn_sibling(traveler.clone());
-        traveler
+        )
     }
 
     fn view(&self) -> WorldView {
