@@ -6,98 +6,104 @@
 [node name="Stockpile" type="Node2D"]
 script = ExtResource("1_rawk5")
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
+[node name="Contents" type="Node2D" parent="."]
+
+[node name="Sprite2D" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(-26, -22)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
 
-[node name="Sprite2D2" type="Sprite2D" parent="."]
+[node name="Sprite2D2" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(-32, 13)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
 
-[node name="Sprite2D3" type="Sprite2D" parent="."]
+[node name="Sprite2D3" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(-43, 1)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
 
-[node name="Sprite2D4" type="Sprite2D" parent="."]
+[node name="Sprite2D4" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(-20, 35)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
 
-[node name="Sprite2D5" type="Sprite2D" parent="."]
+[node name="Sprite2D5" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(8, 3)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
 
-[node name="Sprite2D6" type="Sprite2D" parent="."]
+[node name="Sprite2D6" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(27, -9)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
 
-[node name="Sprite2D7" type="Sprite2D" parent="."]
+[node name="Sprite2D7" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(11, 21)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
 
-[node name="Sprite2D8" type="Sprite2D" parent="."]
+[node name="Sprite2D8" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(29, 22)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
 
-[node name="Sprite2D9" type="Sprite2D" parent="."]
+[node name="Sprite2D9" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(7, 32)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
 
-[node name="Sprite2D10" type="Sprite2D" parent="."]
+[node name="Sprite2D10" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(3, -15)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
 
-[node name="Sprite2D11" type="Sprite2D" parent="."]
+[node name="Sprite2D11" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(27, 3)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
 
-[node name="Sprite2D12" type="Sprite2D" parent="."]
+[node name="Sprite2D12" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(-9, -25)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
 
-[node name="Sprite2D13" type="Sprite2D" parent="."]
+[node name="Sprite2D13" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(17, -21)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
 
-[node name="Sprite2D14" type="Sprite2D" parent="."]
+[node name="Sprite2D14" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(-11, 14)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
 
-[node name="Sprite2D15" type="Sprite2D" parent="."]
+[node name="Sprite2D15" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(40, 3)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
 
-[node name="Sprite2D16" type="Sprite2D" parent="."]
+[node name="Sprite2D16" type="Sprite2D" parent="Contents"]
 visible = false
 position = Vector2(-13, -4)
 scale = Vector2(0.2, 0.2)
 texture = ExtResource("1_72b7h")
+
+[node name="Label" type="Label" parent="."]
+offset_right = 40.0
+offset_bottom = 23.0
