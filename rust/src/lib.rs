@@ -11,8 +11,14 @@ struct MyExtension;
 #[gdextension]
 unsafe impl ExtensionLibrary for MyExtension {}
 
-struct Character(Gd<Node2D>);
+struct WorldView<'a> {
+    time: &'a GameTime,
+    apple_stock: i64,
+}
 
+struct Character(Gd<Node2D>, Cell<Task>);
+
+#[derive(Clone, Copy)]
 enum Task {
     Eat,
     Sleep,
@@ -20,13 +26,16 @@ enum Task {
 }
 
 impl Character {
-    fn decide(&self, phase: Phase) -> Task {
-        match phase {
-            Phase::Predawn => Task::Sleep,
-            Phase::Morning => Task::Work,
-            Phase::Midday => Task::Eat,
-            Phase::Evening => Task::Work,
-            Phase::Night => Task::Sleep,
+    fn decide(&self, view: WorldView) -> Task {
+        match view.time.phase {
+            Phase::Predawn | Phase::Night => Task::Sleep,
+            _ => {
+                if view.apple_stock > 0 {
+                    Task::Eat
+                } else {
+                    Task::Work
+                }
+            }
         }
     }
 }
@@ -407,10 +416,18 @@ impl Controller {
         traveler
     }
 
+    fn view(&self) -> WorldView {
+        WorldView {
+            time: &self.time,
+            apple_stock: self.apples,
+        }
+    }
+
     fn character_actions(&self) -> Item {
         let mut actions = vec![];
         for c in self.characters.iter() {
-            let task = c.decide(self.time.phase);
+            let task = c.decide(self.view());
+            c.1.set(task);
             actions.push(self.fulfill(c, task));
         }
         Item::Play(OutcomeMux::from(actions))
@@ -419,7 +436,7 @@ impl Controller {
     fn character_cleanup(&self) -> Item {
         let mut cleanups = vec![];
         for c in self.characters.iter() {
-            let task = c.decide(self.time.phase);
+            let task = c.1.get();
             cleanups.push(self.finish(c, task));
         }
         Item::Play(OutcomeMux::from(cleanups))
@@ -466,7 +483,10 @@ impl INode for Controller {
             .unwrap()
             .get_nodes_in_group("characters".into())
             .iter_shared()
-            .for_each(|node| self.characters.push(Character(node.cast())));
+            .for_each(|node| {
+                self.characters
+                    .push(Character(node.cast(), Cell::new(Task::Sleep)))
+            });
     }
 }
 
