@@ -16,7 +16,31 @@ struct WorldView<'a> {
     apple_stock: i64,
 }
 
-struct Character(Gd<Node2D>, Cell<Task>);
+enum Personality {
+    Cooperative,
+    Greedy,
+}
+
+struct Character {
+    graphics: Gd<Node2D>,
+    task: Cell<Task>,
+    personality: Personality,
+}
+
+impl Character {
+    fn new(node: Gd<Node2D>) -> Self {
+        let personality = if node.get_name().hash() % 4 == 1 {
+            Personality::Greedy
+        } else {
+            Personality::Cooperative
+        };
+        Character {
+            graphics: node,
+            task: Cell::new(Task::Sleep),
+            personality,
+        }
+    }
+}
 
 #[derive(Clone, Copy)]
 enum Task {
@@ -27,15 +51,22 @@ enum Task {
 
 impl Character {
     fn decide(&self, view: WorldView) -> Task {
-        match view.time.phase {
-            Phase::Predawn | Phase::Night => Task::Sleep,
-            _ => {
-                if view.apple_stock > 0 {
-                    Task::Eat
-                } else {
-                    Task::Work
+        match self.personality {
+            Personality::Greedy => match view.time.phase {
+                Phase::Predawn | Phase::Night => Task::Sleep,
+                _ => {
+                    if view.apple_stock > 0 {
+                        Task::Eat
+                    } else {
+                        Task::Work
+                    }
                 }
-            }
+            },
+            Personality::Cooperative => match view.time.phase {
+                Phase::Predawn | Phase::Night => Task::Sleep,
+                Phase::Morning | Phase::Evening => Task::Work,
+                Phase::Midday => Task::Eat,
+            },
         }
     }
 }
@@ -386,7 +417,8 @@ impl Controller {
 
     fn pick_apple(&self, character: &Character) -> Gd<Traveler> {
         let spawn = self.apple_tree.bind().pick();
-        let mut traveler = Traveler::new(400.0, OutcomeChannel::empty(), &spawn, &character.0);
+        let mut traveler =
+            Traveler::new(400.0, OutcomeChannel::empty(), &spawn, &character.graphics);
         traveler.bind_mut().load_child("res://apple.tscn");
         self.spawn_sibling(traveler.clone());
         traveler
@@ -397,7 +429,7 @@ impl Controller {
             1000.0,
             OutcomeChannel::new(vec![Outcome::Apples { delta: -1 }, Outcome::StatusQuo], 1),
             &self.stockpile,
-            &character.0,
+            &character.graphics,
         );
         traveler.bind_mut().load_child("res://apple.tscn");
         self.spawn_sibling(traveler.clone());
@@ -408,7 +440,7 @@ impl Controller {
         let mut traveler = Traveler::new(
             1000.0,
             OutcomeChannel::delayed(Outcome::Apples { delta: 1 }),
-            &character.0,
+            &character.graphics,
             &self.stockpile,
         );
         traveler.bind_mut().load_child("res://apple.tscn");
@@ -427,7 +459,7 @@ impl Controller {
         let mut actions = vec![];
         for c in self.characters.iter() {
             let task = c.decide(self.view());
-            c.1.set(task);
+            c.task.set(task);
             actions.push(self.fulfill(c, task));
         }
         Item::Play(OutcomeMux::from(actions))
@@ -436,7 +468,7 @@ impl Controller {
     fn character_cleanup(&self) -> Item {
         let mut cleanups = vec![];
         for c in self.characters.iter() {
-            let task = c.1.get();
+            let task = c.task.get();
             cleanups.push(self.finish(c, task));
         }
         Item::Play(OutcomeMux::from(cleanups))
@@ -483,10 +515,7 @@ impl INode for Controller {
             .unwrap()
             .get_nodes_in_group("characters".into())
             .iter_shared()
-            .for_each(|node| {
-                self.characters
-                    .push(Character(node.cast(), Cell::new(Task::Sleep)))
-            });
+            .for_each(|node| self.characters.push(Character::new(node.cast())));
     }
 }
 
