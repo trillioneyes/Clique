@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" uid="uid://cva8ppi0jo7be" path="res://stockpile.tscn" id="4_d81wp"]
 
 [node name="World" type="Node2D"]
+metadata/_edit_lock_ = true
 
 [node name="Character" parent="." groups=["characters"] instance=ExtResource("1_dbg47")]
 position = Vector2(174, 314)
@@ -49,3 +50,4 @@ offset_bottom = 23.0
 alignment = 1
 
 [node name="Stockpile" parent="." instance=ExtResource("4_d81wp")]
+position = Vector2(955, 350)
